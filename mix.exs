@@ -1,28 +1,58 @@
 defmodule PhoenixLiveViewExt.MixProject do
   use Mix.Project
 
+  @version "1.0.0"
+
   def project do
     [
       app: :phoenix_live_view_ext,
-      version: "0.1.0",
-      elixir: "~> 1.10",
+      version: @version,
+      elixir: "~> 1.7",
       start_permanent: Mix.env() == :prod,
-      deps: deps()
+      deps: deps(),
+      description: description(),
+      package: package(),
+      docs: docs()
     ]
   end
 
-  # Run "mix help compile.app" to learn about applications.
   def application do
     [
-      extra_applications: [:logger]
+      extra_applications: []
     ]
   end
 
-  # Run "mix help deps" to learn about dependencies.
   defp deps do
     [
-      # {:dep_from_hexpm, "~> 0.3.0"},
-      # {:dep_from_git, git: "https://github.com/elixir-lang/my_dep.git", tag: "0.1.0"}
+      { :phoenix, "~> 1.5"},
+      { :ex_doc, "~> 0.22", only: :dev, runtime: false}
+    ]
+  end
+
+  defp description() do
+    """
+    A library of functional extensions for the Phoenix LiveView framework.
+    """
+  end
+
+  defp package() do
+    [
+      maintainers: [ "DaTrader"],
+      licenses: [ "MIT"],
+      links: %{ github: "https://github.com/DaTrader/phoenix_live_view_ext"}
+    ]
+  end
+
+  defp docs() do
+    [
+      main: "readme",
+      name: "PhoenixLiveViewExt",
+      source_ref: "v#{ @version}",
+      canonical: "http://hexdocs.pm/phoenix_live_view_ext",
+      source_url: "https://github.com/DaTrader/phoenix_live_view_ext",
+      extras: [
+        "README.md"
+      ]
     ]
   end
 end
