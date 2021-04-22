@@ -40,7 +40,6 @@ defmodule PhoenixLiveViewExt.Listiller do
     end
   end
 
-
   @doc """
   Distills the assigns for the components handled by a module implementing the Listilled behaviour.
 
@@ -54,10 +53,13 @@ defmodule PhoenixLiveViewExt.Listiller do
   """
   @spec apply( module(), state(), state()) :: { [ assigns()], :full | :partial}
   def apply( listilled, old_state, new_state) do
-    if !function_exported?( listilled, :state_changed?, 2) or listilled.state_changed?( old_state, new_state) do
+    if !function_exported?( listilled, :state_changed?, 2) or
+         listilled.state_changed?( old_state, new_state)
+      do
       { old_ids, old_state} = listilled.prepare_list( old_state)
       { new_ids, new_state} = listilled.prepare_list( new_state)
       list_update = old_ids == [] && :full || :partial
+
       assign_list =
         listill( List.myers_difference( old_ids, new_ids), listilled,
           %{
@@ -66,12 +68,12 @@ defmodule PhoenixLiveViewExt.Listiller do
             inserted: MapSet.new()
           }, [])
         |> then( fn { _, _, diffs} -> list_assigns( diffs, list_update) end)
+
       { assign_list, list_update}
     else
       { [], :partial}
     end
   end
-
 
   # Recursively goes through a myers difference of row_id and by first collecting all diff_ids to be inserted
   # ensures those are not deleted as they are considered moved.
@@ -83,6 +85,7 @@ defmodule PhoenixLiveViewExt.Listiller do
 
   defp listill( [ { :eq, eq} | rest], listilled, args, diffs) do
     { _, inserted, diffs} = listill( rest, listilled, args, diffs)
+
     diffs =
       for diff_id <- Enum.reverse( eq),
           new_assigns = listilled.construct_assigns( args.new_state, diff_id),
@@ -91,6 +94,7 @@ defmodule PhoenixLiveViewExt.Listiller do
         do
         diffs -> [ { :update, new_assigns} | diffs]
       end
+
     [ dst_id | _] = eq
     { dst_id, inserted, diffs}
   end
@@ -98,6 +102,7 @@ defmodule PhoenixLiveViewExt.Listiller do
   defp listill( [ { :ins, ins} | rest], listilled, args, diffs) do
     args = %{ args | inserted: MapSet.union( args.inserted, MapSet.new( ins))}
     { dst_id, inserted, diffs} = listill( rest, listilled, args, diffs)
+
     { dst_id, diffs} =
       for diff_id <- Enum.reverse( ins), reduce: { dst_id, diffs} do
         { dst_id, diffs} ->
@@ -105,18 +110,22 @@ defmodule PhoenixLiveViewExt.Listiller do
           diff = { :insert, { dst_id && listilled.component_id( dst_id), assigns}}
           { diff_id, [ diff | diffs]}
       end
+
     { dst_id, inserted, diffs}
   end
 
   defp listill( [ { :del, del} | rest], listilled, args, diffs) do
     { dst_id, inserted, diffs} = listill( rest, listilled, args, diffs)
-    del = Enum.reject( del, &MapSet.member?( inserted, &1)) # removes from deletion list all marked as inserted (moved)
+    # removes from deletion list all marked as inserted (moved)
+    del = Enum.reject( del, &MapSet.member?( inserted, &1))
+
     diffs =
       for diff_id <- Enum.reverse( del), reduce: diffs do
         diffs ->
           diff = { :delete, diff_id && listilled.construct_assigns( args.old_state, diff_id)}
           [ diff | diffs]
       end
+
     { dst_id, inserted, diffs}
   end
 

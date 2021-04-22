@@ -24,9 +24,9 @@ defmodule PhoenixLiveViewExt.MixProject do
 
   defp deps do
     [
-      { :dialyxir, "~> 1.0", only: [ :dev, :test], runtime: false},
-      { :phoenix, "~> 1.5"},
-      { :ex_doc, "~> 0.22", only: :dev, runtime: false}
+      {:dialyxir, "~> 1.0", only: [:dev, :test], runtime: false},
+      {:phoenix, "~> 1.5"},
+      {:ex_doc, "~> 0.22", only: :dev, runtime: false}
     ]
   end
 
@@ -38,9 +38,9 @@ defmodule PhoenixLiveViewExt.MixProject do
 
   defp package() do
     [
-      maintainers: [ "DaTrader"],
-      licenses: [ "MIT"],
-      links: %{ github: "https://github.com/DaTrader/phoenix_live_view_ext"}
+      maintainers: ["DaTrader"],
+      licenses: ["MIT"],
+      links: %{github: "https://github.com/DaTrader/phoenix_live_view_ext"}
     ]
   end
 
@@ -48,7 +48,7 @@ defmodule PhoenixLiveViewExt.MixProject do
     [
       main: "readme",
       name: "PhoenixLiveViewExt",
-      source_ref: "v#{ @version}",
+      source_ref: "v#{@version}",
       canonical: "http://hexdocs.pm/phoenix_live_view_ext",
       source_url: "https://github.com/DaTrader/phoenix_live_view_ext",
       extras: [

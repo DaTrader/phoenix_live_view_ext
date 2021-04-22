@@ -13,5 +13,4 @@ defmodule PhoenixLiveViewExt.Listilled.Helpers do
   @spec phx_update( :full | :partial) :: String.t()
   def phx_update( :full), do: "replace"
   def phx_update( :partial), do: "append"
-
 end

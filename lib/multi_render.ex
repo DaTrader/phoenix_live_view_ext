@@ -36,36 +36,36 @@ defmodule PhoenixLiveViewExt.MultiRender do
                 ..
   """
 
-  defmacro __before_compile__( env) do
-    render? = Module.defines?( env.module, { :render, 1})
+  defmacro __before_compile__(env) do
+    render? = Module.defines?(env.module, {:render, 1})
 
     if render? do
-      root = Path.dirname( env.file)
-      pattern = template_pattern( env)
-      templates = Phoenix.Template.find_all( root, pattern)
+      root = Path.dirname(env.file)
+      pattern = template_pattern(env)
+      templates = Phoenix.Template.find_all(root, pattern)
 
       for template <- templates do
-        basename = Path.basename( template, Path.extname( template))
-        relative_path = Path.relative_to_cwd( template)
-        ext = template |> Path.extname() |> String.trim_leading( ".") |> String.to_atom()
-        engine = Map.fetch!( Phoenix.Template.engines(), ext)
-        ast = engine.compile( template, basename)
+        basename = Path.basename(template, Path.extname(template))
+        relative_path = Path.relative_to_cwd(template)
+        ext = template |> Path.extname() |> String.trim_leading(".") |> String.to_atom()
+        engine = Map.fetch!(Phoenix.Template.engines(), ext)
+        ast = engine.compile(template, basename)
 
         quote do
-          @external_resource unquote( relative_path)
-          defp render( unquote( basename), var!( assigns)) when is_map( var!( assigns)) do
-            unquote( ast)
+          @external_resource unquote(relative_path)
+          defp render(unquote(basename), var!(assigns)) when is_map(var!(assigns)) do
+            unquote(ast)
           end
         end
       end
     end
   end
 
-  defp template_pattern( env) do
+  defp template_pattern(env) do
     env.module
     |> Module.split()
     |> List.last()
     |> Macro.underscore()
-    |> Kernel.<>( "*.html")
+    |> Kernel.<>("*.html")
   end
 end
