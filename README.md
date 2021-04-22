@@ -29,3 +29,11 @@ end
 ## Docs
 
 The docs can be found at [https://hexdocs.pm/phoenix_live_view_ext](https://hexdocs.pm/phoenix_live_view_ext).
+
+## Notes
+
+- Formatting
+
+  The source code formatting in this library diverges from the standard formatting practice based on using `mix format`
+  in that there's a leading space character inserted before all first arguments and first elements for the purpose of
+  (subject to author's personal perception) improving the code readability.
