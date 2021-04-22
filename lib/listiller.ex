@@ -61,12 +61,16 @@ defmodule PhoenixLiveViewExt.Listiller do
       list_update = old_ids == [] && :full || :partial
 
       assign_list =
-        listill( List.myers_difference( old_ids, new_ids), listilled,
+        listill(
+          List.myers_difference( old_ids, new_ids),
+          listilled,
           %{
             old_state: old_state,
             new_state: new_state,
             inserted: MapSet.new()
-          }, [])
+          },
+          []
+        )
         |> then( fn { _, _, diffs} -> list_assigns( diffs, list_update) end)
 
       { assign_list, list_update}
