@@ -24,6 +24,7 @@ defmodule PhoenixLiveViewExt.MixProject do
 
   defp deps do
     [
+      { :dialyxir, "~> 1.0", only: [ :dev, :test], runtime: false},
       { :phoenix, "~> 1.5"},
       { :ex_doc, "~> 0.22", only: :dev, runtime: false}
     ]
