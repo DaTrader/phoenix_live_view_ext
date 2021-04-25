@@ -1,22 +1,410 @@
 defmodule PhoenixLiveViewExt.Listiller do
-  @moduledoc """
-  Transforms new state relative to the old one into a list of LiveComponent assigns so as to leave out
-  the assigns for any component for which the new state does not result changed after the transformation.
-  In other words, it diffs the list of LiveComponent assigns resulting from the state-to-assigns transformation
-  (the list of which components are typically rendered as children of an appended or prepended container element).
+  @moduledoc ~S'''
+  Helps LiveView optimally insert, update and delete list elements with replacing the entire list only when absolutely
+  necessary (i.e. when initialized).
 
-  The purpose of Listiller is to allow for optimal use of appended/prepended container lists where only
-  the list elements that have actually changed are sent by LiveView from the server to the JS client when
-  traversing the DOM changes.
-  While this can be manually optimized for changes of the individual component instances by sending the
-  changes via LiveView.send_update/3 such an approach to optimization will not suffice in cases with multiple
-  component changes and, more importantly, in cases in which there are elements required for insertion to or
-  deletion from the container list.
+  Transforms new state relative to the old one into a list of LiveComponent assigns so as to leave out the assigns for
+  any listed component instances for which the new state does not result changed after the transformation. In other
+  words, it diffs the list of LiveComponent assigns resulting from the state-to-assigns transformation (the components
+  of which list are typically rendered as children of an appended or prepended container element).
 
-  The module uses :updated as a reserved key in the generated assigns, so developers need to make sure
-  they don't use it for other purposes in the assigns they construct in `Listilled.construct_assigns/2`
-  implementations of the Listilled behaviour.
-  """
+  The purpose of Listiller is to allow for optimal implementation of appended/prepended container lists where only the
+  list elements that have actually changed are sent from the server to the JS client over the wire and patched when
+  client-side LiveView traverses the DOM elements. While this can be manually optimized for individual component
+  instances by sending changes via `LiveView.send_update/3` such an approach will not suffice in cases with multiple
+  component changes and more importantly, in the cases where there are elements required for insertion to or deletion
+  from the container list.
+
+  The module relies on the reserved `:updated` key in the 'listilled' assigns, so developers need to make sure they
+  don't use it for other purposes when constructing assigns in the `c:PhoenixLiveViewExt.Listilled.construct_assigns/2`
+  callback implementation.
+
+  Below we use an example to explain step by step how to use Listiller. We do so on a non-trivial example of a table
+  (two dimensions of components - the row components and the cell components nested in them).
+
+  ## TableView example
+
+  Our example relies on the following assumptions:
+  - `TableLive` module prepares the assigns for the corresponding `table_live.html.leex` template which lists all table
+    rows. The assigns include a temporarily assigned list of rows to append/update that is mapped to `:rows`. The list
+    contains only the rows that have actually changed and are to be treated as inserted, updated or deleted.
+  - `RowComponent` module prepares the assigns for the corresponding `row_component_t.html.leex` template which lists
+    all cells in the row. Analogously, this involves the assigns used by the template itself as well as a temporarily
+    assigned list of assigns for each cell that has actually changed (again, as in inserted, updated or deleted cells).
+  - We implement the `CellComponent` module and the corresponding `cell_component.html_t.leex` template to render
+    table cells.
+  - The original state (the data model) that is held persistently assigned with `TableLive` is maintained in its
+    domain-logic normalized form and both the temporary assigns for `RowComponent` and the ones for `CellComponent` are
+    constructed dynamically. This is because any non-trivial real-life UC will most certainly not have its data kept
+    optimally denormalized for the LiveView templates, while in the end the assigns need to be optimized for it is
+    based on their diffing that the LiveView framework decides on what to send over the wire and what not.
+  - Since an appended container in LiveView can only have its elements updated or appended, the final changes are
+    performed in JS when we are sure that LiveView has applied all the necessary patches. The finalization involves
+    deletion of the marked-to-delete updated elements and sorting (repositioning) of the marked-to-sort appended
+    elements.
+
+  The first step is to write our `TableLive` module. Note that the `:rows` assigns have to be constructed and assigned
+  every time the data may have possibly changed, involving all callbacks such as `handle_info` and `handle_event`.
+
+      defmodule TableLive do
+        use TableAppWeb, :live_view
+        alias PhoenixLiveViewExt.Listiller
+
+        # If relying on handle_params to initialize then the initialization should be done there instead.
+        @impl true
+        def mount( _params, _session, socket) do
+          { :ok, initialize( socket), temporary_assigns: [ rows: []]}
+        end
+
+        defp initialize( socket) do
+          # passing an empty map to construct_rows to trigger a :full update, i.e. replacing the list
+          construct_rows( socket, %{})
+        end
+
+        # handles events and optionally changes the state
+        @impl true
+        def handle_event( event, payload, socket) do
+          { :noreply, socket
+                      |> maybe_apply_changes( event, payload)
+                      |> then( & &1.assigns.any_changes? && construct_rows( &1, socket.assigns) || &1)
+          }
+        end
+
+        @impl true
+        def handle_info( event, socket) do
+          { :noreply, event
+                      |> handle_server_response( socket)
+                      |> construct_rows( socket.assigns)
+          }
+        end
+
+        defp construct_rows( socket, old_state) do
+          { rows, table_update} = Listiller.apply( RowComponent, old_state, socket.assigns)
+          socket
+          |> assign( :rows, rows)
+          |> assign( :table_update, table_update)
+        end
+      end
+
+  Next we make `PhoenixLiveViewExt.Listilled.Helpers.phx_update/1` function available to our live view template..
+
+      defmodule TableView do
+        use TableAppWeb, :view
+        import PhoenixLiveViewExt.Listilled.Helpers, only: [ phx_update: 1]
+      end
+
+  .. and we make sure we properly render rows in our `table_live.html.leex`:
+
+      ..
+      <div id="table"
+        phx-update="<%= phx_update( @table_update) %>"
+        phx-hook="TableHook">
+        <%= for row_assigns <- @rows do %>
+          <%= live_component @socket, RowComponent, row_assigns %>
+        <% end %>
+      </div>
+      <div id="update-handler"
+           class="hidden"
+           data-print="<%= update_print( assigns) %>"
+           phx-hook="UpdateHook"></div>
+      ..
+
+  Note that we place the `update-handler` element _after_ the `table` element in our template. This is because we need
+  this element's `updated` callback invoked in JS after we are sure that all our components have been rendered by
+  LiveView. As a reminder, LiveView will invoke `updated` callbacks starting with the `table` element and followed by
+  each component recursively i.e. in the exact same order the elements get patched top down, and since there is no
+  `afterUpdated` callback, we need this extra element with its own hook. And we need it updated when and if any listed
+  component is updated.
+
+  We assure the latter is true by invoking a _function_ we pass the entire assigns map to so that LiveView cannot
+  optimize and skip the update. The `update_print/1` function here returns a pseudo random number encoded as a string
+  and is out of the scope of this library. The point is having the `UpdateHook`'s `updated` callback invoked once all
+  elements in the lists have been patched by LiveView.
+
+  Now we provide the `RowComponent` module which, on one side is a `Listilled` `behaviour` implementation in charge of
+  rendering its templates and on the other, it provides the necessary behavior to support its nested `CellComponents`.
+
+      defmodule RowComponent do
+        use Phoenix.LiveComponent
+        alias PhoenixLiveViewExt.Listiller
+
+        ########################
+        # Cell container related
+        #
+
+        @impl true
+        def mount( socket) do
+          { :ok, socket, temporary_assigns: [ cells: nil]}
+        end
+
+        # Temporarily assigns the list of cell assigns for cell_components.
+        @impl true
+        def update( new_assigns, socket) do
+          { cells, row_update} = Listiller.apply( CellComponent, socket.assigns, new_assigns)
+          { :ok, socket
+                 |> assign( new_assigns)
+                 |> assign( :cells, cells)
+                 |> assign( :row_update, row_update)
+          }
+        end
+
+        ####################################
+        # Listilled behaviour implementation
+        #
+
+        alias PhoenixLiveViewExt.Listilled
+        @behaviour Listilled
+
+        # Prepares the row dom_id list and (optionally) supplements the provided state with any
+        # additional data required for constructing the assigns.
+        @impl true
+        def prepare_list( state) do
+          with %{ model: model} <- state do
+            dom_ids = fetch_dom_ids( model)
+            { dom_ids, state}
+          else
+            _ -> { [], state}
+          end
+        end
+
+        # Returns dom_id as component_id
+        @impl true
+        def component_id( dom_id), do: dom_id
+
+        # Constructs new row assigns from the provided model state.
+        @impl true
+        def construct_assigns( state, dom_id) do
+          # state-to-assigns transformations here
+          ..
+          %{
+            id: dom_id, # component id
+            # other assigns including state required to construct the cell assigns
+            ..
+          }
+        end
+
+        ##################
+        # Template helpers
+        #
+
+        import PhoenixLiveViewExt.Listilled.Helpers
+        require PhoenixLiveViewExt.MultiRender
+        @before_compile PhoenixLiveViewExt.MultiRender
+
+        @impl true
+        def render( %{ updated: :delete} = assigns) do
+          ~L"""
+          <div id="row-<%= @id %>" data-delete="true"></div>
+          """
+        end
+        def render( assigns) do
+          render( "row_component_t.html", assigns)
+        end
+      end
+
+  Note that above we rely on the first available feature in the PhoenixLiveViewExt library v1.0.1 - the `MultiRender`
+  `before_compile` macro that lets us define multiple (conditional) templates per LiveComponent.
+
+  Also, take note that our `RowComponent` module imports both `Distiller.Helper` functions because its component's
+  element requires post-append sorting while the template itself nests `CellComponents` thus requiring the `phx-update`
+  attribute set relative to whether to `replace` or or to `append` the cells that have changed.
+
+  Below is the relevant part of our `row_component_t.html.leex` template:
+
+      <div id="row-<%= @id %>"
+           data-sort="<%= updated_sort( @updated) %>"
+           phx-update="<%= phx_update( @row_update) %>"
+           phx-hook="RowHook">
+        <%= for cell_assigns <- @cells do %>
+          <%= live_component( @socket, CellComponent, cell_assigns) %>
+        <% end %>
+      </div>
+
+  As imagined, our `CellComponent` next is relatively simple as it has no further nested components to pass the assigns
+  to, and all it does is implement its `Listilled` behaviour and renders its templates.
+
+      defmodule CellComponent do
+        alias PhoenixLiveViewExt.Listilled
+        @behaviour Listilled
+
+        # Returns cell component id based on unique cell coordinates (a row dom_id and a cell key).
+        @impl true
+        def component_id( { dom_id, key}) do
+          "#{ dom_id}-#{ key}"
+        end
+
+        # Prepares the key list and returns it along with the state.
+        @impl true
+        def prepare_list( state) do
+          with %{ keys: keys} <- state do
+            { Enum.map( keys, &{ state.dom_id, &1}), state}
+          else
+            _ -> { [], state}
+          end
+        end
+
+        # Constructs cell assigns from the provided segment state.
+        @impl true
+        def construct_assigns( state, { dom_id, key}) do
+          # state-to-assigns transformations here
+          ..
+          %{
+            id: component_id( { dom_id, key}),
+            dom_id: dom_id,
+            key: key,
+            # other assigns
+            ..
+          }
+        end
+
+        ##################
+        # Template helpers
+        #
+
+        import PhoenixLiveViewExt.Listilled.Helpers, only: [ updated_sort: 1]
+        require PhoenixLiveViewExt.MultiRender
+        @before_compile PhoenixLiveViewExt.MultiRender
+
+        @impl true
+        def render( %{ updated: :delete} = assigns) do
+          ~L"""
+          <div id="cell-<%= @dom_id %>-<%= @key %>" data-delete="true"></div>
+          """
+        end
+        def render( assigns) do
+          render( "cell_component_t.html", assigns)
+        end
+      end
+
+  And the `cell_component_t.html.leex` template part required to operate:
+
+      <div id="cell-<%= @dom_id %>-<%= @key %>"
+         data-sort="<%= updated_sort( @updated) %>"
+         phx-hook="CellHook">
+         <!-- cell content -->
+      </div>
+
+  Finally, we need some JS code to make everything work as intended.
+  The intention of the code below is _not_ to
+  provide a ready-to-use, copy-paste implementation (as neither is for any of the code in this documentation), but to
+  get a glimpse of the steps required for everything to function properly. However, the flow of invocation and the
+  sorting algo logic should remain the same.
+
+      let _sortElements = [];
+
+      export const TableHook = {
+        mounted: function() {
+          // adding listeners
+          this._afterModelUpdate = e => afterModelUpdate( this, e);
+          this.el.addEventListener( "afterModelUpdate", this._afterModelUpdate);
+        },
+        destroyed: function() {
+          // removing listeners
+          if( this._afterModelUpdate) {
+            this.el.removeEventListener( "afterModelUpdate", this._afterModelUpdate);
+          }
+        },
+        updated: function() {
+          this._isModelUpdated = true;
+        }
+      };
+
+      export const UpdateHook = {
+        updated: function() {
+          const event = new Event( 'afterModelUpdate');
+          document.getElementById( 'table').dispatchEvent( event);
+        }
+      };
+
+      function afterModelUpdate( me, e) {
+        const isModelUpdated = me._isModelUpdated;
+        me._isModelDisabled = false;
+        if( !isModelUpdated) return;
+
+        completeListill( me);
+      }
+
+      /* Completes the listill process by deleting all elements marked for deletion
+       * and sorting the inserted ones.
+       */
+      function completeListill( me) {
+        deleteElements( me);
+        sortElements();
+      }
+
+      /* Iterates over the FILO element array prepared for sorting (starting from
+       * the last pushed one) and repositions each of the elements found therein.
+       */
+      function sortElements() {
+        _sortElements.forEach( sort => {
+          const src = elementById( sort.src);
+          const dst = elementById( sort.dst);
+          if( src && dst) {
+            dst.parentNode.insertBefore( src, dst);
+          }
+        });
+        _sortElements = [];
+      }
+
+      /* Deletes all the elements tagged for deletion.
+       */
+      function deleteElements( src) {
+        src.el.querySelectorAll( 'div[data-delete]').forEach( el => {
+          el.dispatchEvent( new Event( 'killListeners'));
+          el.parentNode.removeChild( el);
+        })
+      }
+
+      /* Depending on row component/element implementation, the updated callback
+       * may or may not be needed in this Hook; same for CellHook
+       */
+      export const RowHook = {
+        mounted: function() {
+          this._killListeners = () => {
+            if( this._killListeners) {
+              this.el.removeEventListener( "killListeners", this._killListeners);
+            }
+          };
+          this.el.addEventListener( "killListeners", this._killListeners);
+          prepForSorting( this.el, getRowSortId);
+        },
+        updated: function() {
+          prepForSorting( this.el, getRowSortId);
+        },
+        destroyed: function() {
+          if( this._killListeners) this._killListeners();
+        }
+      };
+
+      function getRowSortId( bareId) {
+        return elemId ? ( 'row-' + bareId) : null;
+      }
+
+      export const CellHook = {
+        mounted: function() {
+          this._killListeners = () => {
+            // remove other CellHook listeners here
+            if( this._killListeners) {
+              this.el.removeEventListener( "killListeners", this._killListeners);
+            }
+          };
+          this.el.addEventListener( "killListeners", this._killListeners);
+          prepForSorting( this.el, getCellSortId);
+        },
+        destroyed: function() {
+          if( this._killListeners) this._killListeners();
+        }
+      };
+
+      function getCellSortId( bareId) {
+        return 'cell-' + bareId;
+      }
+
+  An important note: It is best advised that both sorting and deletion be done like this - in a bulk fashion all
+  at once after all the list elements have been rendered. The attempts to do it (e.g. deletion) on element by element
+  basis upon each element getting updated (i.e. interleaved with LiveView DOM patching) ends up in certain but
+  relatively difficult to reproduce bugs involving inconsistent DOM state.
+  '''
   alias PhoenixLiveViewExt.Listilled
 
   @typep assigns() :: Listilled.assigns()
@@ -35,21 +423,21 @@ defmodule PhoenixLiveViewExt.Listiller do
 
   # Define the then/2 function unless already defined in Kernel
   unless function_exported?( Kernel, :then, 2) do
-    def then( value, fun) do
+    defp then( value, fun) do
       fun.( value)
     end
   end
 
   @doc """
-  Distills the assigns for the components handled by a module implementing the Listilled behaviour.
+  Distills the assigns for the components handled by the provided module that implements Listilled behaviour.
 
   Note:
   Due to the lack of access to the LiveView internally held diff state and the fact that we intentionally assign
-  constructed assigns as temporary_assigns, this function invokes Listilled.construct_assigns/2 with both the
-  new and old state in every cycle. Typically, this has no significant impact on the overall performance even
-  with tens of thousands of elements and the approach was chosen over keeping the derived transformations
-  as permanent assigns to reduce memory load on the LiveView instance as it is expected that most if not
-  all of the state provided is already kept stored in the LiveView.
+  constructed assigns as temporary_assigns, this function invokes `c:PhoenixLiveViewExt.Listilled.construct_assigns/2`
+  on both the new and the old state in every cycle. Typically, this has no significant impact on the overall performance
+  even with tens of thousands of elements and the approach was chosen over keeping the derived transformations as
+  (persistent) assigns to reduce memory load on the LiveView instance for it is expected that most if not all of the
+  state supplied to the function is already kept stored with in the LiveView instance.
   """
   @spec apply( module(), state(), state()) :: { [ assigns()], :full | :partial}
   def apply( listilled, old_state, new_state) do

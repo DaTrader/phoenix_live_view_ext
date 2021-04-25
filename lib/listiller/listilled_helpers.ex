@@ -4,12 +4,12 @@ defmodule PhoenixLiveViewExt.Listilled.Helpers do
   Listilled assign lists.
   """
 
-  @doc "Returns the sort instruction string (or nil if :sort not specified)."
+  @doc "Returns the sort instruction string (or nil if sorting not required)."
   @spec updated_sort( { :sort, dst :: String.t()}) :: String.t()
   def updated_sort( { :sort, dst_dom_id}), do: dst_dom_id
   def updated_sort( _), do: nil
 
-  @doc "Returns container phx_update string based on the type of list update."
+  @doc "Returns container `phx-update` attribute string based on the type of list update."
   @spec phx_update( :full | :partial) :: String.t()
   def phx_update( :full), do: "replace"
   def phx_update( :partial), do: "append"

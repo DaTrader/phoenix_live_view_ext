@@ -7,17 +7,19 @@ defmodule PhoenixLiveViewExt.Listilled do
   which for LiveView is the default behavior when dealing with element lists.
 
   LiveComponent templates rendered by relying on the assigns constructed with this module need to take into account
-  the :updated assign and interpret it according to the presented in `t:updated/0`. The same is also used
-  in the Javascript element sorting code.
+  the `:updated` assign and interpret it according to the `t:updated/0` docs. The same is also used in the Javascript
+  element sorting code.
   """
 
   @typedoc """
-  - `:noop` instructs of patching without sorting; intended for actual element updates or :full insertions (replacements)
+  - `:noop` instructs of patching without sorting; intended for actual element updates or `:full` insertions
+    (replacements)
   - `:delete` instructs of rendering the marked-for-deletion variation of the LiveComponent element
-  - `{ :sort, dst_id :: String.t()}` instructs of sorting the element before the provided
+  - `{ :sort, dst_id :: String.t()}` instructs of sorting the element i.e. inserting it before the provided destination
+     dom id.
   """
   @type updated() :: :noop | :delete | { :sort, dst_id :: String.t()}
-  @type assigns() :: %{ :updated => updated(), atom() => any()}
+  @type assigns() :: %{ :updated => updated(), optional( atom()) => any()}
   @type state() :: term() | nil
   @typep diff_id() :: any()
 
