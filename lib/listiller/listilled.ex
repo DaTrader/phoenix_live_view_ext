@@ -36,8 +36,8 @@ defmodule PhoenixLiveViewExt.Listilled do
   """
   @callback prepare_list( state()) :: { [ diff_id()], state()}
 
-  @doc "Returns the component id string representation of the provided element diff id."
-  @callback component_id( diff_id()) :: String.t()
+  @doc "Returns the component id string representation for the provided element diff id."
+  @callback component_id( diff_id(), state()) :: String.t()
 
   @doc "Constructs component assigns from the provided model state."
   @callback construct_assigns( state(), diff_id()) :: assigns()

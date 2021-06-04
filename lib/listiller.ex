@@ -499,7 +499,7 @@ defmodule PhoenixLiveViewExt.Listiller do
       for diff_id <- Enum.reverse( ins), reduce: { dst_id, diffs} do
         { dst_id, diffs} ->
           assigns = listilled.construct_assigns( args.new_state, diff_id)
-          diff = { :insert, { dst_id && listilled.component_id( dst_id), assigns}}
+          diff = { :insert, { dst_id && listilled.component_id( dst_id, args.new_state), assigns}}
           { diff_id, [ diff | diffs]}
       end
 

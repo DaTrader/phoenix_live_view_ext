@@ -31,7 +31,7 @@ This package can be installed by adding `phoenix_live_view_ext` to your list of 
 ```elixir
 def deps do
   [
-    { :phoenix_live_view_ext, "~> 1.1.0"}
+    { :phoenix_live_view_ext, "~> 1.2.0"}
   ]
 end
 ```
