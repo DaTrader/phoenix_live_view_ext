@@ -1,7 +1,7 @@
 defmodule PhoenixLiveViewExt.MixProject do
   use Mix.Project
 
-  @version "1.2.0"
+  @version "1.2.1"
 
   def project do
     [
@@ -24,9 +24,10 @@ defmodule PhoenixLiveViewExt.MixProject do
 
   defp deps do
     [
-      {:dialyxir, "~> 1.0", only: [:dev, :test], runtime: false},
-      {:phoenix, "~> 1.5"},
-      {:ex_doc, "~> 0.22", only: :dev, runtime: false}
+      { :dialyxir, "~> 1.0", only: [:dev, :test], runtime: false},
+      { :phoenix, "~> 1.5"},
+      { :phoenix_live_view, "~> 0.15.4"},
+      { :ex_doc, "~> 0.22", only: :dev, runtime: false}
     ]
   end
 
