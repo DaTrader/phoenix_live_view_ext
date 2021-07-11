@@ -36,6 +36,19 @@ def deps do
 end
 ```
 
+In JS file(s) where the hooks are defined, import the Listiller JS code as follows:
+
+```
+import {
+  newListill,
+  prepForSorting,
+  completeListill,
+  applyCall,
+  initApplyCall,
+  deinitApplyCall,
+} from "../../deps/phoenix_live_view_ext/assets/js/listiller";
+```
+
 ## Docs
 
 The docs can be found at [https://hexdocs.pm/phoenix_live_view_ext](https://hexdocs.pm/phoenix_live_view_ext).
