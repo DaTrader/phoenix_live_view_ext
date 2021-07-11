@@ -41,7 +41,9 @@ defmodule PhoenixLiveViewExt.MixProject do
     [
       maintainers: ["DaTrader"],
       licenses: ["MIT"],
-      links: %{github: "https://github.com/DaTrader/phoenix_live_view_ext"}
+      links: %{github: "https://github.com/DaTrader/phoenix_live_view_ext"},
+      files: ~w(assets/js lib priv .formatter.exs mix.exs README* readme* LICENSE*
+                license* CHANGELOG* changelog* src)
     ]
   end
 
