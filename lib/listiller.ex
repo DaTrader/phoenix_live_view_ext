@@ -411,7 +411,7 @@ defmodule PhoenixLiveViewExt.Listiller do
 
 
   # Define the then/2 function unless already defined in Kernel
-  unless function_exported?( Kernel, :then, 2) do
+  unless macro_exported?( Kernel, :then, 2) || function_exported?( Kernel, :then, 2) do
     defp then( value, fun) do
       fun.( value)
     end
