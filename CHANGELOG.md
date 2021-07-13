@@ -1,5 +1,10 @@
 # Changelog
 
+## 1.2.2 (2021-07-13)
+
+- Add check if Kernel.then/2 macro exists before defining own Listiller.then/2 function.
+  This makes it compatible with Elixir 1.12.+ 
+
 ## 1.2.1 (2021-06-22)
 
 #### Breaking changes
